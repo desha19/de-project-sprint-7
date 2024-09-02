@@ -1,0 +1,17 @@
+Приветствую!
+
+Для проекта был написан DAG: 
+	dag.py.
+DAG содержит таски:
+	"showcase_by_users_2" - выполняет скрипт "showcase_by_users_2.py";
+	"showcase_in_section_of_zones_3" - выполняет скрипт "showcase_in_section_of_zones_3.py";
+	"recommendations_to_friends_4" - выполняет скрипт "recommendations_to_friends_4.py".
+
+Скрипты:
+"showcase_by_users_2.py" выполняет создание витрины в разрезе пользователей и сохраняет в файловую систему HDFS в дирректорию: "/user/denis19/analytics/showcase_by_users/";
+"showcase_in_section_of_zones_3.py" выполняет создание витрины в разрезе зон и сохраняет в файловую систему HDFS в дирректорию: "/user/denis19/analytics/showcase_in_section_of_zones/";
+"recommendations_to_friends_4.py" выполняет создание витрины для рекомендации друзей и сохраняет в файловую систему HDFS в дирректорию: "/user/denis19/analytics/showcase_recommendations_to_friends/";
+Файл "geo.csv" на ходится в HDFS в дирректории: "/user/denis19/data/geo/cities/actual/geo.csv";
+Данные по события я брал из HDFS по дирректории: "/user/master/data/geo/events/".
+
+В каждом скрипте стралася комментировать каждое важное действие.
