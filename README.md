@@ -21,3 +21,5 @@
 Внутри `src` расположены две папки:
 - `/src/dags`;
 - `/src/sql`.
+
+![03_09](https://github.com/user-attachments/assets/3ead52f3-f586-4e6e-bd9a-162f92fe6431)
