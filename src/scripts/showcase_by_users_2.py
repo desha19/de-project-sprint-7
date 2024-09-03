@@ -73,24 +73,31 @@ def events_with_geo(events_transform_df: DataFrame, geo_transform_df: DataFrame)
         .withColumn("event_id", F.monotonically_increasing_id())
         # выбор и переименование столбцов для удобства дальнейшей обработки
         .selectExpr("message_id", "message_from as user_id", "event_id", "event_type", "id as zone_id", "city", "date")
+        .persist
         )
-    # группировка данных по "user_id", считая количество путешествий "travel_count" и список городов "travel_array", которые посетил пользователь
-    events_with_geo_df = (
+    
+    return events_with_geo_df
+
+# Test
+#events_with_geo_df = events_with_geo(events_transform_df, geo_transform_df)
+#events_with_geo_df.show()
+
+def travel_calc(events_with_geo_df: DataFrame) -> DataFrame:
+    # Группировка данных по "user_id", считая количество путешествий "travel_count" и список городов "travel_array", которые посетил пользователь
+    travel_calc_df = (
         events_with_geo_df
         .groupBy("user_id")
         .agg(
             F.count("*").alias("travel_count"),
             F.collect_list("city").alias("travel_array")
         )
-        # объединение агрегированных данных с исходным датафрейм
-        .join(events_with_geo_df, "user_id")
-        .persist()
     )
-    return events_with_geo_df
+
+    return travel_calc_df
 
 # Test
-#events_with_geo_df = events_with_geo(events_transform_df, geo_transform_df)
-#events_with_geo_df.show()
+#travel_calc_df = travel_calc(events_with_geo_df)
+#travel_calc_df.show()
 
 def actual_geo(events_with_geo_df: DataFrame) -> DataFrame:
     # при помощи оконной функции происходит группировка строй по "user_id" и упорядочивает их по "data" в порядке убывания
@@ -100,7 +107,7 @@ def actual_geo(events_with_geo_df: DataFrame) -> DataFrame:
             .withColumn("row_number", F.row_number().over(window))
             # оставляем строки "row_number" только с номером 1, то есть последние события для каждого пользователя
             .filter(F.col("row_number") == 1)
-            .selectExpr("message_id", "user_id", "city", "zone_id", "travel_count", "travel_array")
+            .selectExpr("message_id", "user_id", "city", "zone_id")   # убрал "travel_count", "travel_array"
             .persist()
            )
     return actual_geo_df
@@ -163,7 +170,7 @@ def merge_actual_and_home_geo(actual_geo_df: DataFrame, home_geo_df: DataFrame, 
     # объединяем "actual_geo_df" c "home_geo_df" по "user_id" и "user" соотвественно с использованем полного внешнего соединения. Затем выбираем нужные столбцы и переименовываем
        actual_geo_df
        .join(home_geo_df, actual_geo_df.user_id == home_geo_df.user, "fullouter")
-       .selectExpr("user_id", "city as act_city", "home_city", "travel_count", "travel_array")
+       .selectExpr("user_id", "city as act_city", "home_city")    # убрал поля "travel_count", "travel_array"
        .persist()
     )
     return merge_actual_and_home_geo_df
@@ -172,7 +179,7 @@ def merge_actual_and_home_geo(actual_geo_df: DataFrame, home_geo_df: DataFrame, 
 #merge_actual_and_home_geo_df = merge_actual_and_home_geo_df(actual_geo_df, home_geo_df, geo_transform_df)
 #merge_actual_and_home_geo_df.show()
 
-def mart_users_cities(events_path: DataFrame, merge_actual_and_home_geo_df: DataFrame, sql) -> DataFrame:
+def mart_users_cities(events_path: DataFrame, merge_actual_and_home_geo_df: DataFrame, travel_calc: DataFrame, sql) -> DataFrame:
     times = (
         # загружаем данные из паркет файла, фильтруем собятия типа "message" и выбираем нужные поля
         sql.read.parquet(f'{events_path}')
@@ -211,6 +218,7 @@ def mart_users_cities(events_path: DataFrame, merge_actual_and_home_geo_df: Data
                     F.concat(F.lit("Australia/"), 
                     F.col("act_city"))))
                     .otherwise(None))
+                    .join(travel_calc, merge_actual_and_home_geo_df.user_id == travel_calc.user_id, "left")  # добавил соединение "travel_calc"
         .select("user_id", "act_city", "home_city", "travel_count", "travel_array", "local_time")
         .persist()
         )
@@ -239,11 +247,12 @@ def main() -> None:
     geo_transform_df = geo_transform(geo_path, sql)
     events_transform_df = events_transform(events_path, sql)
     events_with_geo_df = events_with_geo(events_transform_df, geo_transform_df)
+    travel_calc_df = travel_calc(events_with_geo_df)
     actual_geo_df = actual_geo(events_with_geo_df)
     travel_geo_df = travel_geo(events_with_geo_df)
     home_geo_df = home_geo(travel_geo_df)
     merge_actual_and_home_geo_df = merge_actual_and_home_geo(actual_geo_df, home_geo_df, geo_transform_df)
-    mart_users_cities_df = mart_users_cities(events_path, merge_actual_and_home_geo_df, sql)
+    mart_users_cities_df = mart_users_cities(events_path, merge_actual_and_home_geo_df, travel_calc_df, sql)
     write = mart_users_cities_df.write.mode("overwrite").parquet(f'{output_path}')
 
     return write

@@ -145,22 +145,22 @@ def events_union_sender_receiver(events_path: str, sql) -> DataFrame:
 
 def recommendations(events_transform_from: DataFrame, events_transform_to: DataFrame, geo_transform: DataFrame, events_subscription: DataFrame, events_union_sender_receiver: DataFrame) -> DataFrame:
     result = (
-        events_transform_from
-            .crossJoin(events_transform_to)
+        events_transform_from.alias("from1")
+            .crossJoin(events_transform_from.alias("from2"))
             # вычисляем растояние между координатами "lat_eff", "lon_eff" и "lat_eft", "lon_eft"
             .withColumn("distance", F.lit(2) * F.lit(6371) * F.asin(
                 F.sqrt(
-                F.pow(F.sin((F.col('lat_eff') - F.col('lat_eft')) / F.lit(2)),2)
-                + F.cos(F.col("lat_eff"))*F.cos(F.col("lat_eft")) *
-                F.pow(F.sin((F.col('lon_eff') - F.col('lon_eft')) / F.lit(2)),2)
+                F.pow(F.sin((F.col('from1.lat_eff') - F.col('from2.lat_eft')) / F.lit(2)),2)
+                + F.cos(F.col("from1.lat_eff"))*F.cos(F.col("from2.lat_eft")) *
+                F.pow(F.sin((F.col('from1.lon_eff') - F.col('from2.lon_eft')) / F.lit(2)),2)
         )))
         # фильтруем строки, где расстояние меньше или равно 1
         .where("distance <= 1")
         # вычисляем среднюю точку между координатами "lat_eff", "lon_eff" и "lat_eft", "lon_eft"
-        .withColumn("middle_point_lat", (F.col('lat_eff') + F.col('lat_eft'))/F.lit(2))
-        .withColumn("middle_point_lon", (F.col('lon_eff') + F.col('lon_eft'))/F.lit(2))
+        .withColumn("middle_point_lat", (F.col('from1.lat_eff') + F.col('from2.lat_eft'))/F.lit(2))
+        .withColumn("middle_point_lon", (F.col('from1.lon_eff') + F.col('from2.lon_eft'))/F.lit(2))
         # выбираем и переименовываем столбцы "message_id_from" на "user_left", "message_id_to" на "user_right" и удаляем дубликаты
-        .selectExpr("message_id_from as user_left", "message_id_to as user_right", "middle_point_lat", "middle_point_lon")
+        .selectExpr("from1.message_id_from as user_left", "from2.message_id_to as user_right", "middle_point_lat", "middle_point_lon")
         .distinct()
         .persist()
         )

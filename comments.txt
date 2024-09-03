@@ -1,3 +1,4 @@
+02.09.2024
 Приветствую!
 
 Для проекта был написан DAG: 
@@ -15,3 +16,19 @@ DAG содержит таски:
 Данные по события я брал из HDFS по дирректории: "/user/master/data/geo/events/".
 
 В каждом скрипте стралася комментировать каждое важное действие.
+
+03.09.2024
+Привествую, Егор!
+
+Скрипт "showcase_by_users_2.py":
+	- создал новую функцию "travel_calc" в которой производятся расчёты для полей "travel_count" и "travel_array", а из функции "events_with_geo" убрал и 
+	  в функции "mart_users_cities" датафрейм "travel_count_df" приджойнил к датафрейму "merge_actual_and_home_geo_df";
+	- в функции "actual_geo" при селекте убрал поля "travel_count" и "travel_array".
+
+Скрипт "showcase_in_section_of_zones_3.py":
+	- в функции "events_with_geo" в окне в партиционировании изменил "message_id" на "event_id";
+	- создание нового поля "event_id" (.withColumn('event_id', F.monotonically_increasing_id())) перенёс до кросджоина.
+
+Скрипт "recommendations_to_friends_4.py":
+	- удалил лишнюю функцию "events_transform_to";
+	- в функции "recommendations" при джойне использовал два раза "events_transform_from" и присвоил алиасы from1 и from2 соотвественно.

@@ -54,6 +54,8 @@ def events_with_geo(events_transform_df: DataFrame, geo_transform_df: DataFrame)
         # объединяем датафреймы "events_transform_df" и "geo_transform_df"
         events_transform_df
         .crossJoin(geo_transform_df)
+        # добавим столбец "event_id" с уникакльными значениями, используя функцию "monotonically_increasing_id"
+        .withColumn('event_id', F.monotonically_increasing_id())
         # добавляем столбец "distance", который вычисляет расстояние между координатами событий и географическими координатами
         .withColumn("distance", F.lit(2) * F.lit(6371) * F.asin(
         F.sqrt(
@@ -64,7 +66,7 @@ def events_with_geo(events_transform_df: DataFrame, geo_transform_df: DataFrame)
         # удаляем не нужные столбцы
         .drop("lat_e","lon_e", "lat_g", "lng_g"))
     # создадим окно, которое группирует строки по "messenge_id" и сортирует их по возростанию расстояния
-    window = Window().partitionBy('message_id').orderBy(F.col('distance').asc())
+    window = Window().partitionBy('event_id').orderBy(F.col('distance').asc())
     events_with_geo_df = (
         events_with_geo_df
         # добавим столбец "row_number", который присваивает каждой строке уникальный номер в пределах группы
@@ -73,8 +75,6 @@ def events_with_geo(events_transform_df: DataFrame, geo_transform_df: DataFrame)
         .filter(F.col('row_number')==1)
         # удаление временных полей
         .drop('row_number', 'distance')
-        # добавим столбец "event_id" с уникакльными значениями, используя функцию "monotonically_increasing_id"
-        .withColumn('event_id', F.monotonically_increasing_id())
         # выбираем и переименовываем необходимые столбцы
         .selectExpr("message_id", "message_from as user_id", "event_id", "event_type", "id as zone_id", "city", "date")
         .persist()
