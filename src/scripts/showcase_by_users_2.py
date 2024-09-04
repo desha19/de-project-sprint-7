@@ -73,7 +73,7 @@ def events_with_geo(events_transform_df: DataFrame, geo_transform_df: DataFrame)
         .withColumn("event_id", F.monotonically_increasing_id())
         # выбор и переименование столбцов для удобства дальнейшей обработки
         .selectExpr("message_id", "message_from as user_id", "event_id", "event_type", "id as zone_id", "city", "date")
-        .persist
+        .persist()
         )
     
     return events_with_geo_df
@@ -219,7 +219,7 @@ def mart_users_cities(events_path: DataFrame, merge_actual_and_home_geo_df: Data
                     F.col("act_city"))))
                     .otherwise(None))
                     .join(travel_calc, merge_actual_and_home_geo_df.user_id == travel_calc.user_id, "left")  # добавил соединение "travel_calc"
-        .select("user_id", "act_city", "home_city", "travel_count", "travel_array", "local_time")
+        .select(merge_actual_and_home_geo_df["user_id"], "act_city", "home_city", "travel_count", "travel_array", "local_time")
         .persist()
         )
     
@@ -230,12 +230,12 @@ def mart_users_cities(events_path: DataFrame, merge_actual_and_home_geo_df: Data
 #mart_users_cities_df.orderBy(F.col("home_city").desc()).show()
 
 def main() -> None:
-    #events_path = sys.argv[1]
-    #geo_path = sys.argv[2]
-    #output_path = sys.argv[3]
-    events_path = "/user/master/data/geo/events/"
-    geo_path = "/user/denis19/data/geo/cities/actual/geo.csv"
-    output_path = "/user/denis19/analytics/showcase_by_users"
+    events_path = sys.argv[1]
+    geo_path = sys.argv[2]
+    output_path = sys.argv[3]
+    #events_path = "/user/master/data/geo/events/"
+    #geo_path = "/user/denis19/data/geo/cities/actual/geo.csv"
+    #output_path = "/user/denis19/analytics/showcase_by_users"
 
     conf = (SparkConf()
         .setAppName("showcase_recommendations_to_friends")

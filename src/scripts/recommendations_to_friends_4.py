@@ -65,36 +65,6 @@ def events_transform_from(events_path: str, sql) -> DataFrame:
 #events_transform_from_df = events_filtered_from("/user/master/data/geo/events", spark)
 #events_transform_from_df.orderBy(F.col("subscription_channel").desc()).show(n=10)
 
-def events_transform_to(events_path: str, sql) -> DataFrame:
-    # чтение паркет файла
-    events_transform_to = (sql
-        .read.parquet(events_path)
-        # оставляем только те строки, где "event_type" равно "message"
-        .where('event_type = "message"')
-        .selectExpr("event.message_id as message_id_to", "event.message_to", "event.subscription_channel", "lat", "lon", "date")
-        .where("lat IS NOT NULL and lon IS NOT NULL")
-        .where("message_to IS NOT NULL")
-        # переименовываем столбцы для удобства
-        .withColumnRenamed("lat", "lat_eft")
-        .withColumnRenamed("lon", "lon_eft")
-        .persist()
-    )
-    # создаём окно, которое группирует группирует строки по "message_id" и сортирует их по "date" в порядке убывания
-    window = Window().partitionBy("message_to").orderBy(F.col("date").desc())
-    events_transform_to = (
-        events_transform_to
-        # добавляем столбец "row_number", который содержит номер строки в каждой группе, отсортированной по дате
-        .withColumn("row_number", F.row_number().over(window))
-        # фильтруем строки, оставляя только первую строки в каждой группе (самую последнюю по дате)
-        .filter(F.col("row_number") == 1)
-        .drop("row_number")
-    )
-    return events_transform_to
-
-# Test
-#events_transform_to_df = events_transform_to("/user/master/data/geo/events", spark)
-#events_transform_to_df.show()
-
 def events_subscriptions(events_path: str, sql) -> DataFrame:
     # чтение паркет файла и переименовываем столбц "subscription_channel" на "ch"
     events_subscription = (sql
@@ -143,22 +113,22 @@ def events_union_sender_receiver(events_path: str, sql) -> DataFrame:
 #events_union_sender_receiver_df = events_union_sender_receiver("/user/master/data/geo/events", spark)
 #events_union_sender_receiver_df.show()
 
-def recommendations(events_transform_from: DataFrame, events_transform_to: DataFrame, geo_transform: DataFrame, events_subscription: DataFrame, events_union_sender_receiver: DataFrame) -> DataFrame:
+def recommendations(events_transform_from: DataFrame, geo_transform: DataFrame, events_subscription: DataFrame, events_union_sender_receiver: DataFrame) -> DataFrame:
     result = (
         events_transform_from.alias("from1")
             .crossJoin(events_transform_from.alias("from2"))
-            # вычисляем растояние между координатами "lat_eff", "lon_eff" и "lat_eft", "lon_eft"
+            # вычисляем растояние между координатами "lat_eff", "lon_eff" и "lat_eff", "lon_eff"
             .withColumn("distance", F.lit(2) * F.lit(6371) * F.asin(
                 F.sqrt(
-                F.pow(F.sin((F.col('from1.lat_eff') - F.col('from2.lat_eft')) / F.lit(2)),2)
-                + F.cos(F.col("from1.lat_eff"))*F.cos(F.col("from2.lat_eft")) *
+                F.pow(F.sin((F.col('from1.lat_eff') - F.col('from2.lat_eff')) / F.lit(2)),2)
+                + F.cos(F.col("from1.lat_eff"))*F.cos(F.col("from2.lat_eff")) *
                 F.pow(F.sin((F.col('from1.lon_eff') - F.col('from2.lon_eft')) / F.lit(2)),2)
         )))
         # фильтруем строки, где расстояние меньше или равно 1
         .where("distance <= 1")
-        # вычисляем среднюю точку между координатами "lat_eff", "lon_eff" и "lat_eft", "lon_eft"
-        .withColumn("middle_point_lat", (F.col('from1.lat_eff') + F.col('from2.lat_eft'))/F.lit(2))
-        .withColumn("middle_point_lon", (F.col('from1.lon_eff') + F.col('from2.lon_eft'))/F.lit(2))
+        # вычисляем среднюю точку между координатами "lat_eff", "lon_eff" и "lat_eff", "lon_eff"
+        .withColumn("middle_point_lat", (F.col('from1.lat_eff') + F.col('from2.lat_eff'))/F.lit(2))
+        .withColumn("middle_point_lon", (F.col('from1.lon_eff') + F.col('from2.lon_eff'))/F.lit(2))
         # выбираем и переименовываем столбцы "message_id_from" на "user_left", "message_id_to" на "user_right" и удаляем дубликаты
         .selectExpr("from1.message_id_from as user_left", "from2.message_id_to as user_right", "middle_point_lat", "middle_point_lon")
         .distinct()
@@ -230,7 +200,7 @@ def recommendations(events_transform_from: DataFrame, events_transform_to: DataF
     return result
 
 # Test
-#recommendations_df = recommendations(events_transform_from_df, events_transform_to_df,  geo_transform_df, events_subscriptions_df, events_union_sender_receiver_df)
+#recommendations_df = recommendations(events_transform_from_df,  geo_transform_df, events_subscriptions_df, events_union_sender_receiver_df)
 #recommendations_df.show()
 
 def main() -> None:
@@ -250,10 +220,9 @@ def main() -> None:
 
     geo_transform_df = geo_transform(geo_path, sql)
     events_transform_from_df = events_transform_from(events_path, sql)
-    events_transform_to_df = events_transform_to(events_path, sql)
     events_subscriptions_df = events_subscriptions(events_path, sql)
     events_union_sender_receiver_df = events_union_sender_receiver(events_path, sql)
-    recommendations_df = recommendations(events_transform_from_df, events_transform_to_df, geo_transform_df, events_subscriptions_df, events_union_sender_receiver_df)
+    recommendations_df = recommendations(events_transform_from_df, geo_transform_df, events_subscriptions_df, events_union_sender_receiver_df)
     write = recommendations_df.write.mode('overwrite').parquet(f'{output_path}')
 
     return write
